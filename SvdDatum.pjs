@@ -1,0 +1,55 @@
+class SVDDatum3D {
+  // Class to contain SVD data loaded from the server. 
+  // Each object contains the coordinates computed by the SVD for each tag. 
+  
+  String   name; 
+  float[]  projectedPoint;
+  float[]  displayPoint;
+  float sx;
+  float sy;
+  float sz; 
+  
+  SVDDatum3D (String gmlFilename, float svdx, float svdy, float svdz){
+    name = gmlFilename;
+    projectedPoint = new float[3]; 
+    projectedPoint[0] = svdx;
+    projectedPoint[1] = svdy;
+    projectedPoint[2] = svdz;
+    sx = sy = sz = 0;
+  }
+  
+  void print(){
+    float svdx = projectedPoint[0];
+    float svdy = projectedPoint[1];
+    float svdz = projectedPoint[2];
+    println(name + "\t" + svdx + "\t" + svdy + "\t" + svdz); 
+  }
+  
+  void setDisplayPoint(float[] p, int nDimensions) {
+	sx = (float) p[0];
+	sy = (float) p[1];
+	sz = (float) p[2];
+  }
+
+}
+
+//==================================================================================
+void loadSvdRawDataIntoObjects (){
+	float tempFloats3[] = {0.0, 0.0, 0.0};
+	
+	int nRawDataLines = svdRawData.length();
+	for (int i=0; i<nRawDataLines; i++){
+		String gmlFilename = svdRawData[i][0];
+		int nLinePieces = svdRawData[i].length();
+		
+		if (nLinePieces == (nSvdDimensionsToSearch+1)){
+			float svdx = svdRawData[i][1];
+			float svdy = svdRawData[i][2];
+			float svdz = (nSvdDimensionsToSearch == 2) ? 0 : svdRawData[i][3];
+			SVDDatum3D aSvdDatum = new SVDDatum3D(gmlFilename, svdx, svdy, svdz);
+			SVDData.push(aSvdDatum); 
+		}
+	}
+}
+
+

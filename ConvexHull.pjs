@@ -1,0 +1,292 @@
+
+
+class ConvexHull {
+
+  var tempHull = [];
+  var hull     = [];
+  int depth; 
+
+  ConvexHull() {
+
+  }
+
+
+  //-----------------------------------------------------------------------------------------------------------------
+  // QuickHull Algorithm implementation.
+  Object quickHull (GMLTag tag) {
+
+    GMLStroke aStroke   = tag.flatCopyStroke;
+    var strokePts       = aStroke.pts;
+    int numberOfPoints  = strokePts.length();
+    depth = 0; 
+
+    if (numberOfPoints > 3) {
+
+      hull.length = 0;
+      tempHull.length = 0;
+
+      var Pe1 = [];
+      var Pe2 = [];
+
+      XYTPoint l = strokePts[0];
+      XYTPoint r = strokePts[0];
+
+      float minX = l.x;
+      float maxX = l.x;
+      int minAt = 0;
+      int maxAt = 0;	
+
+      // find the max and min x-coord point
+      XYTPoint currPt;
+      for (int i = 1; i < numberOfPoints; i++) {
+        currPt = strokePts[i];
+        if ( currPt.x > maxX) {
+          r = currPt;
+          maxX = currPt.x;
+          maxAt = i;
+        };
+        if ( currPt.x < minX) {
+          l = currPt;
+          minX = currPt.x;
+          minAt = i;
+        };
+      }
+
+
+      //find out whether each point is over or under the line formed by the two points 
+      // with min and max x-coord, and put them in 2 group according to whether they are above or under 
+      for (int i = 0; i < numberOfPoints; i++) {
+        if ((i != maxAt) && (i != minAt)) {
+          currPt = (XYTPoint) strokePts[i];
+          if (onLeft( l, r, currPt)) {
+            Pe1.push( currPt );
+          } 
+          else {
+            Pe2.push( currPt );
+          }
+        }
+      };
+
+      //put the max and min x-cord points in each group 
+      Pe1.push( l );
+      Pe1.push( r );
+      Pe2.push( l );
+      Pe2.push( r );
+
+      //calculate the upper hull; put the upper hull result in final result  
+      quick (Pe1, l, r, 0);
+      for (int k=0; k<tempHull.length(); k++) {
+        hull.push( tempHull[k]);
+      }	
+
+      // important for proper shape
+      hull.push(r);
+
+      //critical! or else you get duplication
+      tempHull.length = 0;
+
+      //calculate the lower hull; append the result from lower hull to final result 
+      quick(Pe2, l, r, 1);
+      for (int k= (tempHull.length()-1); k>=0; k--) {
+        hull.push( tempHull[k]);
+      }
+    }
+    return hull;
+
+
+  }
+
+
+
+  //-----------------------------------------------------------------------------------------------------------------
+  void renderHull (Object hull) {
+
+    if (hull != null) {
+      int nHullPoints = hull.length();
+      fill(0, 100, 0, 100); 
+
+      beginShape();
+      for (int j=0; j<nHullPoints; j++) {
+        XYTPoint hullpt = hull[j]; 
+        vertex(hullpt.x, hullpt.y);
+      }
+      endShape();
+    }
+  }
+
+
+
+
+
+  //-----------------------------------------------------------------------------------------------------------------
+  boolean onLeft (XYTPoint aLinep0, XYTPoint aLinep1, XYTPoint chkpt) {
+    //Given a Check point, determine if this check point is lying on the
+    //left side or right side of the first point of the line.
+
+    if (abs(aLinep0.x - aLinep1.x ) < 0.0000001) {
+      if (chkpt.x < aLinep0.x) return true;
+
+      else {
+        if (abs(chkpt.x - aLinep0.x) < 0.0000001) {
+          if (((chkpt.y > aLinep0.y) && (chkpt.y < aLinep1.y)) || ((chkpt.y > aLinep1.y) && (chkpt.y < aLinep0.y))) {
+            return true;
+          } 
+          else {
+            return false;
+          }
+        }
+        else return false;
+      }
+    }
+
+    else {            
+
+      //stupid shit left over from dealing with integer points & rounding error, feh
+      float slope = (aLinep1.y - aLinep0.y) / (aLinep1.x - aLinep0.x);
+      float x3    = (((chkpt.x + slope * (slope * aLinep0.x - aLinep0.y + chkpt.y)) /  (1.0 + slope * slope)) * 10000.0 );
+      float y3    = ((slope * (x3 / 10000 - aLinep0.x) + aLinep0.y) * 10000.0 );
+
+      if (slope == 0.0) {
+        if ((chkpt.y * 10000.0 ) > y3) return true; 
+        else return false;
+      }
+
+      else { 
+        if (slope > 0.0 ) {
+          if (x3 > (chkpt.x * 10000.0 )) return true; 
+          else return false;
+        }
+
+        else {
+          if ((chkpt.x * 10000.0 ) > x3) return true; 
+          else return false;
+        }
+      }
+    }
+  }
+
+
+
+  //-----------------------------------------------------------------------------------------------------------------
+  void quick (var P, XYTPoint l, XYTPoint r, int faceDir) {
+
+    // Recursive method to find the Hull.
+    // faceDir is 0 if we are calculating the upper hull.
+    // faceDir is 1 if we are calculating the lower hull.
+
+    int MAX_RECURSION_DEPTH = 1000;
+    if ((P.length() == 2) || (depth > MAX_RECURSION_DEPTH)) {
+      XYTPoint p0 = P[0];
+      tempHull.push(p0); 
+      P.length = 0;
+      return;
+    } 
+
+    else {
+      
+      depth++;
+      int hAt = splitAt(P, l, r);
+      XYTPoint phAt = P[hAt];
+      XYTPoint currPt;
+
+      var P1 = [];
+      var P2 = [];
+
+      for (int i = 0; i < (P.length() - 2); i++) {
+        if (i != hAt) {
+          currPt = P[i];
+          if (faceDir == 0) {
+            if (onLeft(l, phAt, currPt)) {  
+              P1.push(   currPt     );
+            }
+            if (onLeft(phAt, r, currPt)) {  
+              P2.push(   currPt     );
+            }
+          } 
+
+          else {
+            if (!(onLeft(l, phAt, currPt))) {  
+              P1.push(   currPt     );
+            };
+            if (!(onLeft(phAt, r, currPt))) { 
+              P2.push(   currPt     );
+            };
+          };
+        }
+      }
+
+      P1.push( l );  
+      P1.push( phAt );
+      P2.push( phAt );
+      P2.push( r );
+
+      if (faceDir == 0) {
+        quick(P1, l, phAt, 0);
+        quick(P2, phAt, r, 0);
+      } 
+      else {
+        quick(P1, l, phAt, 1);
+        quick(P2, phAt, r, 1);
+      }
+
+      return;
+    }
+  }
+
+
+
+
+
+
+
+  //Find  a point which is certain to be in the Hull, from among a group of points
+  //All the given points are on the same side of the line formed by l and r,
+  //so the point with the longest distance perpendicular to this line is 
+  //the point we are looking for.  Return the index of this point in the Vector.
+
+  int splitAt (var P, XYTPoint l, XYTPoint r) {
+
+    float denom;  
+    denom = r.x - l.x;
+    if (abs(r.x - l.x) < 0.0000001) { 
+      denom = 0.00001;
+    }
+
+    float newLnSlope = (r.y - l.y) / denom;
+    float x1 = 0; 
+    float y1 = 0;
+    float x3 = 0; 
+    float y3 = 0;
+
+    float maxDist = 0; 
+    float distance = 0;
+    int farPtIndex = 0;
+
+    for (int i = 0; i < (P.length() -2); i++) {
+
+      XYTPoint aPoint = P[i];
+      x1 = aPoint.x;
+      y1 = aPoint.y;
+
+      if (abs(r.y - l.y) < 0.0000001)  {
+        x3 = x1;
+        y3 = l.y;
+      } 
+      else {
+        x3 =   (x1 + newLnSlope * (newLnSlope * l.x - l.y +  y1)) / (1.0 + newLnSlope * newLnSlope);
+        y3 =   newLnSlope * (x3 - l.x) + l.y ;
+      }
+
+      distance = sqrt( (y1-y3)*(y1-y3) + (x1-x3)*(x1-x3));
+      if (distance > maxDist) {
+        maxDist = distance;
+        farPtIndex = i;
+      }
+    }
+
+    return farPtIndex;
+  }
+
+
+}
+

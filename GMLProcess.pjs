@@ -1,0 +1,274 @@
+
+class GMLProcessor {
+  GMLTag	myGMLTag;
+  String    fileName;
+  float		valuesRaw[];
+  float 	valuesForSvd[];
+  int       N_TAG_METRICS_RAW = 37;
+  int       N_TAG_METRICS_FORSVD; 
+  boolean	bKosher = false;
+
+  int fieldSwitches[] = {
+	 1, 3, 4, 5, 6, 7, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36
+  };
+
+
+  int zeroesAllowed[] = {
+		0, // "Filename",     //   0
+		0, // "totalLength",  //   1
+		0, // "aspectRatio",  //   2
+		0, // "nStrokes",     //   3
+		0, // "duration",     //   4
+		0, // "meanDistCent", //   5
+		0, // "stdvDistCent", //   6
+		1, // "totalAbsAngle",//   7
+		1, // "totalAngle",   //   8
+		1, // "meanAngle",    //   9
+		1, // "meanAbsAngle", //  10
+		1, // "stdvAbsAng",   //  11
+		1, // "orientation",  //  12
+		1, // "orientedness", //  13
+		1, // "orientDot",    //  14
+		1, // "vorientation", //  15
+		0, // "vorientedness",//  16
+		1, // "meanVelocity", //  17
+		1, // "stdvVelocity", //  18 
+		1, // "nIntersects",  //  19
+		1, // "nCorners",     //  20
+		1, // "compactness",  //  21
+		1, // "hullPointPct", //  22
+		1, // "moment03",     //  23
+		1, // "moment04",     //  24
+		1, // "moment05",     //  25
+		1, // "moment06",     //  26
+		1, // "moment07",     //  27
+		1, // "moment08",     //  28
+		1, // "moment09",     //  29
+		1, // "moment10",     //  30
+		1, // "moment11",     //  31
+		1, // "moment12",     //  32
+		1, // "moment13",     //  33
+		1, // "moment14",     //  34
+		1, // "moment15",     //  35
+		1  // "moment16"      //  36
+	};
+
+
+  //=====================================================================
+  GMLProcessor (){
+	bKosher  = false;
+	myGMLTag = null;
+	fileName = "";
+	
+	N_TAG_METRICS_FORSVD = fieldSwitches.length();
+	println("N_TAG_METRICS_FORSVD " + N_TAG_METRICS_FORSVD);
+	
+	valuesRaw    = new float[N_TAG_METRICS_RAW];
+	for (int i=0; i<N_TAG_METRICS_RAW; i++){
+		valuesRaw[i]    = 0.0;
+	}
+	
+	valuesForSvd = new float[N_TAG_METRICS_FORSVD];
+	for (int i=0; i<N_TAG_METRICS_FORSVD; i++){
+		valuesForSvd[i] = 0.0;
+	}
+  }
+
+  //=====================================================================
+  void printRaw(){
+	println("Raw from:\t" + fileName);
+	for (int i=0; i<N_TAG_METRICS_RAW; i++){
+		println("[" + i + "]\t" + valuesRaw[i]);
+	}
+  }
+
+  //=====================================================================
+  void printForSvd(){
+	println("For SVD from:\t" + fileName);
+	for (int i=0; i<N_TAG_METRICS_FORSVD; i++){
+		println("[" + i + "]\t" + valuesForSvd[i]);
+	}
+  }
+
+  	//=====================================================================
+  	void computeValuesForSvd(){
+	
+		boolean bGMLAnalysisIsOK = true;
+		for (int j=0; j<N_TAG_METRICS_FORSVD; j++) {
+	     	int fieldId     = fieldSwitches[j];
+			float valRaw    = valuesRaw[fieldId];
+	      	float valForSvd = getFieldSpecificPreprocessedValue (valRaw, fieldId);
+	      	valuesForSvd[j] = valForSvd;
+
+	      	if (zeroesAllowed[fieldId] == 0) {
+	        	if (valForSvd == 0.0) {
+	          		bGMLAnalysisIsOK = false;
+	        	}
+	      	}
+		}
+		
+		if (bGMLAnalysisIsOK){
+			bKosher = true;
+		}
+  	}
+
+
+	//=====================================================================================
+	float getFieldSpecificPreprocessedValue (float aVal, int fieldId) {
+
+		switch (fieldId) {
+			case 15: // vorientation
+				if (aVal < HALF_PI) { aVal += PI; }
+				break;
+
+			case 2:  // aspect ratio
+				aVal = atan2(aVal, 1.0); 
+				break;
+
+			case 3:  // nStrokes
+			case 4:  // duration
+			case 7:  // totalAbsAngle
+			case 17: // meanVelocity
+			case 18: // stdvVelocity
+			case 19: // nIntersects
+				aVal = max(0, aVal);   // sanity
+				aVal = log(1.0+ aVal); 
+				break;
+
+			case 1:  // totalLength
+				aVal = pow(aVal, 0.500); 
+				break;
+			case 16: //vorientedness
+				aVal = pow(aVal, 0.250); 
+				break;
+			case 20: // nCorners
+			case 21: // compactness
+				aVal = pow(aVal, 0.300); 
+				break;
+
+
+			case 23:
+			case 25:
+			case 30: 
+			case 31:
+			case 32:
+			case 33:
+
+				if (aVal <= 0) {
+					aVal = 16;
+				}
+				else if (aVal == 0) {
+					aVal = 16;
+				} 
+				else {
+					aVal = log(1.0 + (1.0 / aVal));
+				}
+				break;
+		}
+		return aVal;
+	}
+
+
+
+
+
+  //=====================================================================
+  void processTag (GMLTag aTag, 
+			boolean bNormalizeIt, 
+			boolean bMakeFlatCopy, 
+			boolean bMakeBlurredCopy) {
+	  
+	  bKosher = false;
+	  if (aTag != null) {
+		
+		myGMLTag = aTag;
+		fileName = aTag.fileName;
+		
+		long processTagStartTime = millis();
+	    if (bNormalizeIt){		aTag.normalizeTag();}
+	    if (bMakeFlatCopy){		aTag.makeFlatCopyStroke();}
+	    if (bMakeBlurredCopy){	aTag.makeBlurredCopy();}
+
+	    float totalLength  = analyzer.getArcLength(aTag); 
+	    float aspectRatio  = analyzer.getAspectRatio (aTag);
+	    float nStrokes     = analyzer.getNStrokes(aTag); 
+	    float duration     = analyzer.getDuration (aTag); 
+
+	    XYTPoint aTagCentroid = analyzer.getCentroid (aTag);
+	    float meanDistCent = analyzer.getMeanDistanceFromCentroid (aTag, aTagCentroid);
+	    float stdvDistCent = analyzer.getStDevDistanceFromCentroid (aTag, aTagCentroid, meanDistCent);
+
+	    float totAngle[]    = analyzer.getTotalAngle (aTag);
+	    float totalAngle    = totAngle[0];
+	    float totalAbsAngle = totAngle[1];
+	    float meanAngle     = totAngle[2];
+	    float meanAbsAngle  = totAngle[3];
+	    float nCorners      = totAngle[4];
+	    float stdvAbsAng    = analyzer.getStDevAbsAngle ( aTag, meanAbsAngle);
+
+	    float orient[]      = analyzer.getOrientation (aTag, aTagCentroid); 
+	    float orientation   = orient[0];
+	    float orientedness  = orient[1];
+
+	    float vorient[]     = analyzer.getVelocityOrientation (aTag);
+	    float vorientation  = vorient[0];
+	    float vorientedness = vorient[1];
+	    float meanVelocity  = vorient[2];
+	    float stdvVelocity  = vorient[3];
+
+	    float orientDot     = analyzer.getOrientationDot (orientation, vorientation); 
+	    float nIntersects   = analyzer.getSelfIntersectionCount (aTag);
+	    float moments[]     = analyzer.getMoments(aTag); 
+
+	    var hull            = huller.quickHull (aTag);
+	    float compactness   = analyzer.getCompactness ( totalLength, hull);
+	    float hullPointPct  = analyzer.getHullPointPercentage (aTag, hull); 
+	
+		long processTagEndTime = millis();
+		long processTagElapsedTime = processTagEndTime - processTagStartTime; 
+	    println("processTagElapsedTime = " + processTagElapsedTime);
+
+		//============================================================
+		valuesRaw[ 0] = -1; // Where the filename would go
+		valuesRaw[ 1] = totalLength;
+		valuesRaw[ 2] = aspectRatio;
+		valuesRaw[ 3] = nStrokes;
+		valuesRaw[ 4] = duration;
+		valuesRaw[ 5] = meanDistCent;
+		valuesRaw[ 6] = stdvDistCent;	
+		valuesRaw[ 7] = totalAbsAngle;
+		valuesRaw[ 8] = totalAngle;
+		valuesRaw[ 9] = meanAngle;
+		
+		valuesRaw[10] = meanAbsAngle;
+		valuesRaw[11] = stdvAbsAng;
+		valuesRaw[12] = orientation;
+		valuesRaw[13] = orientedness;
+		valuesRaw[14] = orientDot;
+		valuesRaw[15] = vorientation;
+		valuesRaw[16] = vorientedness;
+		valuesRaw[17] = meanVelocity;
+		valuesRaw[18] = stdvVelocity;
+		valuesRaw[19] = nIntersects;
+		valuesRaw[20] = nCorners;
+		valuesRaw[21] = compactness;
+		valuesRaw[22] = hullPointPct;
+		
+		valuesRaw[23] = moments[ 3];
+		valuesRaw[24] = moments[ 4];
+		valuesRaw[25] = moments[ 5];
+		valuesRaw[26] = moments[ 6];
+		valuesRaw[27] = moments[ 7];
+		valuesRaw[28] = moments[ 8];
+		valuesRaw[29] = moments[ 9];
+		valuesRaw[30] = moments[10];
+		valuesRaw[31] = moments[11];
+		valuesRaw[32] = moments[12];
+		valuesRaw[33] = moments[13];
+		valuesRaw[34] = moments[14];
+		valuesRaw[35] = moments[15];
+		valuesRaw[36] = moments[16];
+	  }
+	}
+
+}

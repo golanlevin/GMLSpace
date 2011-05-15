@@ -1,0 +1,361 @@
+//=====================================================================
+// A data structure for storing GML point data.
+class XYTPoint {
+  float x;
+  float y;
+  float t;
+
+  XYTPoint () {
+    x = y = t = 0;
+  }
+
+  XYTPoint (float _x, float _y, float _t) {
+    x = _x;
+    y = _y;
+    t = _t;
+  }
+
+  XYTPoint (XYTPoint src) {
+    x = src.x;
+    y = src.y;
+    t = src.t;
+  }
+
+  void set (float _x, float _y, float _t) {
+    x = _x;
+    y = _y;
+    t = _t;
+  }
+
+  void set (float _x, float _y) {
+    x = _x;
+    y = _y;
+  }
+}
+
+
+//=====================================================================
+class GMLStroke {
+
+  var pts = [];
+  //---------------------------------
+  GMLStroke () {
+  }
+
+  //---------------------------------
+  void addXYTPoint (XYTPoint p) {
+    pts.push(p);
+  }
+
+  void addXYTPoint (float _x, float _y, float _t){
+	XYTPoint p = new XYTPoint(_x, _y, _t);
+	pts.push(p);
+  }
+
+  //---------------------------------
+  void render () {
+    int nPoints = pts.length();
+    beginShape();
+    for (int i=0; i<nPoints; i++) {
+      XYTPoint p = pts[i];
+      vertex(p.x, p.y);
+    }  
+    endShape();
+  }
+}
+
+//=====================================================================
+class GMLTag {
+  String    fileName;
+  var strokes = [];
+  var strokesSmoothed = [];
+  GMLStroke flatCopyStroke;
+  
+  
+  //HashMap<String,Float> descriptors;
+
+  //---------------------------------
+  GMLTag () {
+	flatCopyStroke = new GMLStroke();
+    //strokes         = new ArrayList();
+    //resampledTag    = new GMLStroke();
+    //descriptors     = new HashMap<String,Float>();
+  }
+
+  //---------------------------------
+  void addStroke (GMLStroke s) {
+    strokes.push(s);
+  }
+
+  //---------------------------------
+  int getNStrokes() {
+    return strokes.length();
+  }
+
+  //---------------------------------
+  void renderStatic () {
+	stroke(colGMLTagRender);
+	smooth();
+	noFill();
+	
+    int nStrokes = strokes.length();
+    for (int i=0; i<nStrokes; i++) {
+      strokes[i].render();
+    }
+  }
+
+  //---------------------------------
+  void renderBlurredCopy () {
+	stroke(colGMLTagRender);
+	smooth();
+	noFill();
+	
+    int nStrokes = strokesSmoothed.length();
+    for (int i=0; i<nStrokes; i++) {
+      strokesSmoothed[i].render();
+    }
+  }
+
+
+
+  //---------------------------------
+  void makeFlatCopyStroke (){
+    // Make a single Stroke that contains all of the points. 
+    // (Just make a simple copy if there was only one stroke to begin with.)
+    flatCopyStroke.pts.length = 0;
+    int nStrokes = strokes.length();
+    for (int i=0; i<nStrokes; i++) {
+      GMLStroke srcStroke = strokes[i];
+
+	  var srcPts  = srcStroke.pts;
+      int nPoints = srcPts.length();
+      for (int j=0; j<nPoints; j++) {
+	    float x = srcPts[j].x;
+		float y = srcPts[j].y;
+		float t = srcPts[j].t;
+        flatCopyStroke.addXYTPoint(x,y,t);
+      }
+    }
+  }
+
+
+  //---------------------------------
+  void makeBlurredCopy() {
+
+    int nStrokes = strokes.length();
+    for (int i=0; i<nStrokes; i++) {
+      GMLStroke srcStroke = strokes[i];
+      GMLStroke dstStroke = new GMLStroke();
+
+      int nPoints = srcStroke.pts.length();
+      for (int j=0; j<nPoints; j++) {
+        XYTPoint srcPt = srcStroke.pts[j];
+        dstStroke.addXYTPoint(srcPt.x, srcPt.y, srcPt.t);
+      }
+      strokesSmoothed.push(dstStroke);
+    }
+
+    int nRuns = 10;
+    for (int n=0; n<nRuns; n++) {
+      float A = 0.30;
+      float B = 1.0 - 2.0*A;
+      for (int i=0; i<nStrokes; i++) {
+        GMLStroke aStroke = strokesSmoothed[i];
+        int nPoints = aStroke.pts.length();
+        if (nPoints >= 7) {
+
+          for (int j=1; j<(nPoints-1); j++) {
+            XYTPoint pt0 = aStroke.pts[j-1];
+            XYTPoint pt1 = aStroke.pts[j  ];
+            XYTPoint pt2 = aStroke.pts[j+1];
+
+            float x = (pt0.x + pt1.x + pt2.x)/3.0;
+            float y = (pt0.y + pt1.y + pt2.y)/3.0;
+            aStroke.pts[j].set(x,y);
+          }
+        }
+      }
+    }
+  }
+
+
+
+
+  //---------------------------------
+  void normalizeTag() {
+
+    // Initialize range bounds
+    float maxY = -99999.0;
+    float maxX = -99999.0;
+    float maxT = -99999.0;
+    float minY =  99999.0;
+    float minX =  99999.0;
+    float minT =  99999.0;
+
+    // Compute the bounding ranges of the tag.
+    int nStrokes = strokes.length();
+    for (int i=0; i<nStrokes; i++) {
+      GMLStroke s = strokes[i];
+      var pts = s.pts;
+      int nPoints = pts.length();
+      for (int j=0; j<nPoints; j++) {
+        XYTPoint pt = pts[j];
+        float x = pt.x;
+        float y = pt.y;
+        float t = pt.t;
+
+        if (y > maxY) { maxY = y; }
+        if (x > maxX) { maxX = x; }
+        if (t > maxT) { maxT = t; }
+
+        if (y < minY) { minY = y; }
+        if (x < minX) { minX = x; }
+        if (t < minT) { minT = t; }
+      }
+    }
+
+    // Normalize the marks to the range 0..1, 
+    // without changing the aspect ratio of the tag.
+    float rangeX = maxX - minX;
+    float rangeY = maxY - minY;
+    float rangeT = maxT - minT;
+    float normalizingRange = (rangeX > rangeY) ? rangeX : rangeY;
+    float lesserRange      = (rangeX > rangeY) ? rangeY : rangeX;
+
+    // heuristic for guessing whether the time units are seconds or millis:
+    boolean bTimeUnitsAreMillis = (rangeT > 60); 
+	if (normalizingRange > 0){
+	    for (int i=0; i<nStrokes; i++) {
+	      GMLStroke s = strokes[i];
+	      var pts = s.pts;
+	      int nPoints = pts.length();
+	      for (int j=0; j<nPoints; j++) {
+	        XYTPoint pt = pts[j];
+	        pt.x = (pt.x - minX)/normalizingRange;
+	        pt.y = (pt.y - minY)/normalizingRange;
+
+	        if (bTimeUnitsAreMillis) {
+	          pt.t = pt.t / 1000.0;
+	        }
+	      }
+	    }
+	}
+  }
+
+ 
+}
+
+
+  
+  //---------------------------------
+/*
+  String toCSV() {
+    String out = fileName;
+    
+    out += "\t" + nf(descriptors.get("totalLength"),   1,5); 
+    out += "\t" + nf(descriptors.get("aspectRatio"),   1,5); 
+    out += "\t" +    descriptors.get("nStrokes"   ); 
+    out += "\t" + nf(descriptors.get("duration"   ),   1,5); 
+    out += "\t" + nf(descriptors.get("meanDistCent"),  1,5);
+    out += "\t" + nf(descriptors.get("stdvDistCent"),  1,5);
+    out += "\t" + nf(descriptors.get("totalAbsAngle"), 1,5);
+    out += "\t" + nf(descriptors.get("totalAngle"),    1,5);
+    out += "\t" + nf(descriptors.get("meanAngle"),     1,5);
+    out += "\t" + nf(descriptors.get("meanAbsAngle"),  1,5);
+    out += "\t" + nf(descriptors.get("stdvAbsAng"),    1,5);
+    out += "\t" + nf(descriptors.get("orientation"),   1,5);
+    out += "\t" + nf(descriptors.get("orientedness"),  1,5);
+    out += "\t" + nf(descriptors.get("orientDot"),     1,5); 
+    out += "\t" + nf(descriptors.get("vorientation"),  1,5);
+    out += "\t" + nf(descriptors.get("vorientedness"), 1,5);
+    out += "\t" + nf(descriptors.get("meanVelocity"),  1,5);
+    out += "\t" + nf(descriptors.get("stdvVelocity"),  1,5);
+    out += "\t"    + descriptors.get("nIntersects");
+    out += "\t"    + descriptors.get("nCorners");
+    out += "\t" + nf(descriptors.get("compactness"),   1,5);
+    out += "\t" + nf(descriptors.get("hullPointPct"),  1,5);
+   
+    for (int m=3; m<=16; m++){
+      String momentName = "moment" + nf(m,2);
+      out += "\t" + descriptors.get(momentName);
+    }
+    
+    return out;
+  }
+*/
+
+/*
+  //---------------------------------
+  void printDescriptors() {
+
+    println("totalLength   = " + descriptors.get("totalLength")); 
+    println("aspectRatio   = " + descriptors.get("aspectRatio")); 
+    println("nStrokes      = " + descriptors.get("nStrokes")); 
+    println("duration      = " + descriptors.get("duration")); 
+    println("meanDistCent  = " + descriptors.get("meanDistCent"));
+    println("stdvDistCent  = " + descriptors.get("stdvDistCent"));
+    println("totalAbsAngle = " + descriptors.get("totalAbsAngle"));
+    println("totalAngle    = " + descriptors.get("totalAngle"));
+    println("meanAngle     = " + descriptors.get("meanAngle"));
+    println("meanAbsAngle  = " + descriptors.get("meanAbsAngle"));
+    println("stdvAbsAng    = " + descriptors.get("stdvAbsAng"));
+    println("orientation   = " + descriptors.get("orientation"));
+    println("orientedness  = " + descriptors.get("orientedness"));
+    println("orientDot     = " + descriptors.get("orientDot")); 
+    println("vorientation  = " + descriptors.get("vorientation"));
+    println("vorientedness = " + descriptors.get("vorientedness"));
+    println("meanVelocity  = " + descriptors.get("meanVelocity"));
+    println("stdvVelocity  = " + descriptors.get("stdvVelocity"));
+    println("nIntersects   = " + descriptors.get("nIntersects"));
+    println("nCorners      = " + descriptors.get("nCorners"));
+    println("compactness   = " + descriptors.get("compactness"));
+    println("hullPointPct  = " + descriptors.get("hullPointPct"));
+    
+    for (int m=3; m<=16; m++){
+      String momentName = "moment" + nf(m,2);
+      println(momentName + "      = " + descriptors.get(momentName));
+    }
+    
+    println("--------------");
+  }
+*/
+
+
+
+
+
+//=====================================================
+GMLTag makeBogusTag(){
+	
+	GMLTag outTag = new GMLTag();
+	
+	GMLStroke s0 = new GMLStroke();
+	float tim = 0; 
+	
+	float ra = 1.123;
+	float rb = 2.317;	
+	for (int i=0; i<100; i++){
+		float t = (float)i/100.0 * TWO_PI;
+		float r = 50; 
+		float x = 100 + r*1.2 * cos(ra*t);
+		float y = 100 + r     * sin(rb*t);
+		tim += 25.0; // "millis"
+		s0.addXYTPoint(x,y,tim);
+	}
+	outTag.addStroke(s0);
+	
+	ra = 1.23;
+	rb = 0.71;
+	GMLStroke s1 = new GMLStroke();
+	for (int i=0; i<75; i++){
+		float t = (float)i/75.0 * TWO_PI; 
+		float x = 100 + 80 * cos(ra*t);
+		float y = 100 + 40 * sin(rb*t);
+		tim += 25.0; // "millis"
+		s1.addXYTPoint(x,y,tim);
+	}
+	outTag.addStroke(s1);
+	
+	return outTag;
+}
+

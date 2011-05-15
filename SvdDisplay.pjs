@@ -1,0 +1,368 @@
+
+// Dimensions of the SVD graph region. 
+float   svdDrawRectX;
+float   svdDrawRectY;
+float   svdDrawRectW;
+float   svdDrawRectH;
+float   svdDrawRectR;
+float   svdDrawRectB;
+float   svdDrawRectXc;
+float   svdDrawRectYc;
+float   svdDrawRectZ0;
+float   svdDrawRectZ1;
+float   svdDrawMargin;
+float   svdDatumDisplaySelectionX;
+float   svdDatumDisplaySelectionY;
+float   svdDatumDisplaySelectionA;
+float   mouseNearnessThresholdSquared;
+
+
+//=====================================================================================
+void initializeSvdDrawAreaDimensions(){
+	
+	svdDrawMargin =  10;
+	svdDrawRectX  =  25;
+	svdDrawRectY  =  25;
+	svdDrawRectH  = height-2*svdDrawRectY;
+	svdDrawRectW  = svdDrawRectH;
+	svdDrawRectR  = svdDrawRectX + svdDrawRectW;
+	svdDrawRectB  = svdDrawRectY + svdDrawRectH;
+	svdDrawRectXc = svdDrawRectX + svdDrawRectW/2.0;
+	svdDrawRectYc = svdDrawRectY + svdDrawRectH/2.0;
+	svdDrawRectZ0 =  100;
+	svdDrawRectZ1 = -100;
+	
+	mouseNearnessThresholdSquared = sq (svdDrawRectW/3.0);
+	
+	svdDatumDisplaySelectionX = svdDrawRectXc;
+	svdDatumDisplaySelectionY = svdDrawRectYc;
+	svdDatumDisplaySelectionA = 1.0;
+}
+
+
+//=====================================================================================
+int getIndexOfClosestSvdDisplayPointToMouse(){
+	int out = -1;
+	if ((mouseX >= svdDrawRectX) && (mouseX <= svdDrawRectR) &&
+	    (mouseY >= svdDrawRectY) && (mouseY <= svdDrawRectB)){
+	
+		float minDist = 99999;
+		int nSvdDatums = SVDData.length();
+	
+		for (int d=0; d<nSvdDatums; d++) {
+			SVDDatum3D aSvdDatum = SVDData[d];
+			float dx = mouseX - aSvdDatum.sx;
+			float dy = mouseY - aSvdDatum.sy;
+			float dh2 = dx*dx + dy*dy;
+			if (dh2 < mouseNearnessThresholdSquared){
+				if (dh2 < minDist){
+					minDist = dh2;
+					out = d;
+				}
+			}
+		}
+	}
+	return out;
+}
+
+
+//=====================================================================================
+void computeProjectedSvdBounds () {
+
+  projectedSvdDataBounds = new Bounds[nSvdDimensionsToDisplay];
+
+  // compute the min/max bounds of the projected data ...for display purposes.
+  int nSvdDatums = SVDData.length();
+  for (int n=0; n<nSvdDimensionsToDisplay; n++) {
+    projectedSvdDataBounds[n] = new Bounds(); 
+    float minVal = 99999;
+    float maxVal =-99999;
+
+    for (int d=0; d<nSvdDatums; d++) {
+      float[] p = SVDData[d].projectedPoint;
+      float dataVal = p[n]; 
+      if (dataVal < minVal) {
+        minVal = dataVal;
+      }
+      if (dataVal > maxVal) {
+        maxVal = dataVal;
+      }
+    }
+    projectedSvdDataBounds[n].id   = n;
+    projectedSvdDataBounds[n].low  = minVal; 
+    projectedSvdDataBounds[n].high = maxVal;
+  }
+
+  boolean bVerbose = false;
+  if (bVerbose) {
+    for (int n=0; n<nSvdDimensionsToDisplay; n++) {
+      projectedSvdDataBounds[n].print();
+    }
+  }
+}
+
+
+
+//=====================================================================================
+void computeSvdDisplayCoordinates() {
+  // compute the positions at which the data will be displayed.
+  float displayPoint[] = new float[nSvdDimensionsToDisplay]; 
+
+  float minX = projectedSvdDataBounds[0].low;
+  float maxX = projectedSvdDataBounds[0].high; 
+
+  float minY = projectedSvdDataBounds[1].low; 
+  float maxY = projectedSvdDataBounds[1].high; 
+
+  float minZ = 0.0; 
+  float maxZ = 0.0; 
+  if (nSvdDimensionsToDisplay == 3) {
+    minZ = projectedSvdDataBounds[2].low; 
+    maxZ = projectedSvdDataBounds[2].high;
+  }
+ 
+
+  int nSvdDatums = SVDData.length();
+  for (int d=0; d<nSvdDatums; d++) {
+    SVDDatum3D aSvdDatum = SVDData[d];
+
+    float[] projectedPoint = aSvdDatum.projectedPoint;
+    float dataX = projectedPoint[0];
+    float dataY = projectedPoint[1]; 
+
+    displayPoint[0] = map(dataX, minX, maxX, svdDrawRectR-svdDrawMargin, svdDrawRectX+svdDrawMargin);
+    displayPoint[1] = map(dataY, minY, maxY, svdDrawRectY+svdDrawMargin, svdDrawRectB-svdDrawMargin);
+
+    float dataZ = 0.0; 
+    if (nSvdDimensionsToDisplay == 3) {
+      dataZ  = projectedPoint[2]; 
+      displayPoint[2] = map(dataZ, minZ, maxZ, svdDrawRectZ0, svdDrawRectZ1);
+    }
+
+    aSvdDatum.setDisplayPoint(displayPoint, nSvdDimensionsToDisplay);
+  }
+}
+
+
+
+//=====================================================================================
+void displayProjectedSvdPoints2D(){
+	
+	int nSvdDatums = SVDData.length();
+	if (svdPointDrawingTime > svdPointDrawingTargetTime){
+		int tooMuchTimeMillis = (int)(svdPointDrawingTime - svdPointDrawingTargetTime);
+		nSvdDatumsToDraw -= 20 + tooMuchTimeMillis;
+	} else if (svdPointDrawingTime < (svdPointDrawingTargetTime-1.0)){
+		nSvdDatumsToDraw += 10;
+	}
+	nSvdDatumsToDraw = max(min(nSvdDatumsToDraw, nSvdDatums),0);
+	
+	boolean bUsePoints = true; 
+	if (bUsePoints){
+		noFill();
+		stroke(colSvdPoints);
+		strokeWeight(1);
+		
+		beginShape(POINTS);
+	    for (int d=0; d<nSvdDatumsToDraw; d++) {
+		  SVDDatum3D aSvdDatum = SVDData[d];
+		  vertex (aSvdDatum.sx, aSvdDatum.sy); 
+	    }
+		endShape();
+	
+	} else {
+		fill(128,128);
+		noStroke();
+	    for (int d=0; d<nSvdDatumsToDraw; d++) {
+		  SVDDatum3D aSvdDatum = SVDData[d];
+		  ellipse (aSvdDatum.sx, aSvdDatum.sy,5,5); 
+	    }
+	}
+	
+}
+
+//=====================================================================================
+void displayProjectedSvdPointGraph() {
+ 
+ 
+
+  if (nSvdDimensionsToDisplay == 2) {
+	
+	pushMatrix();
+	boolean bRotateStupidly = false;
+	if (bRotateStupidly){
+	  translate( svdDrawRectXc, svdDrawRectYc,0);
+      rotate(mouseX/100.0);
+      translate(-svdDrawRectXc,-svdDrawRectYc,0);
+	}
+    
+    displayProjectedSvdAxes();
+    displayProjectedSvdPoints2D();
+	displaySelectedSvdDatum();
+	
+    popMatrix();
+  } 
+
+  //-----------------------------------
+  else if (nSvdDimensionsToDisplay == 3) {
+	
+	strokeWeight(3);
+	stroke(0,0,0); 
+
+    pushMatrix();
+    translate( svdDrawRectXc, svdDrawRectYc,0);
+    rotateX (mouseY/100.0); 
+    rotateY (mouseX/100.0); 
+    translate(-svdDrawRectXc,-svdDrawRectYc,0);
+    
+    int nSvdDatums = SVDData.length();
+    beginShape(POINTS);
+    for (int d=0; d<nSvdDatums; d++) {
+      SVDDatum3D aSvdDatum = SVDData[d];
+      vertex(aSvdDatum.sx,   aSvdDatum.sy,   aSvdDatum.sz);
+    }
+    endShape();
+    popMatrix();
+  }
+}
+
+//=====================================================================================
+void displaySelectedSvdDatum(){
+	// draw selected datum
+	
+	// fetch the coordinate of the selected datum in the graph, if any.
+	// set the position & alpha of the roving display ellipse. 
+	if (indexOfSelectedSvdDatum > -1){
+		SVDDatum3D selectedSvdDatum = SVDData[indexOfSelectedSvdDatum];
+		float sx = selectedSvdDatum.sx;
+		float sy = selectedSvdDatum.sy;
+		float A = 0.5;
+		float B = 1.0-A;
+		svdDatumDisplaySelectionX = A*svdDatumDisplaySelectionX + B*sx;
+		svdDatumDisplaySelectionY = A*svdDatumDisplaySelectionY + B*sy;
+		svdDatumDisplaySelectionA = 1.0; 
+		
+	} else {
+		svdDatumDisplaySelectionA *= 0.6;
+	}
+	
+	//-----------------------------
+    // Clamp connector line. A very minor aesthetic detail. 
+	float mx = mouseX; 
+	float my = mouseY; 
+	if (mouseX >= svdDrawRectR){
+		float f0 = (float)(svdDrawRectR - svdDatumDisplaySelectionX);
+		float f1 = (float)(mouseX       - svdDatumDisplaySelectionX);
+		mx = svdDrawRectR;
+		my = svdDatumDisplaySelectionY + (f0/f1)*(mouseY - svdDatumDisplaySelectionY);
+		my = max(svdDrawRectY, min(my, svdDrawRectB));
+	} else if (mouseX <= svdDrawRectX){
+		float f0 = (float)(svdDrawRectX - svdDatumDisplaySelectionX);
+		float f1 = (float)(mouseX       - svdDatumDisplaySelectionX);
+		mx = svdDrawRectX;
+		my = svdDatumDisplaySelectionY + (f0/f1)*(mouseY - svdDatumDisplaySelectionY);
+		my = max(svdDrawRectY, min(my, svdDrawRectB));
+	} else if (mouseY >= svdDrawRectB){
+		float f0 = (float)(svdDrawRectB - svdDatumDisplaySelectionY);
+		float f1 = (float)(mouseY       - svdDatumDisplaySelectionY);
+		mx = svdDatumDisplaySelectionX + (f0/f1)*(mouseX - svdDatumDisplaySelectionX);
+		mx = max(svdDrawRectX, min(mx, svdDrawRectR));
+		my = svdDrawRectB;
+	} else 	if (mouseY <= svdDrawRectY){
+		float f0 = (float)(svdDrawRectY - svdDatumDisplaySelectionY);
+		float f1 = (float)(mouseY       - svdDatumDisplaySelectionY);
+		mx = svdDatumDisplaySelectionX + (f0/f1)*(mouseX - svdDatumDisplaySelectionX);
+		mx = max(svdDrawRectX, min(mx, svdDrawRectR));
+		my = svdDrawRectY;
+	}
+	
+	//-----------------------------
+	// draw a little line (actually a triangle) connecting the mouse to the datum.
+	if (svdDatumDisplaySelectionA > 0.01){
+		float diam = 13;
+		smooth();
+		noStroke();
+		
+		float cr = red   (colSelectedSvdDatum);
+		float cg = green (colSelectedSvdDatum);
+		float cb = blue  (colSelectedSvdDatum);
+		float ca = alpha (colSelectedSvdDatum);
+
+		float dr = red   (colSelectedSvdGlow);
+		float dg = green (colSelectedSvdGlow);
+		float db = blue  (colSelectedSvdGlow);
+		float da = alpha (colSelectedSvdGlow); 
+		
+		fill (dr,dg,db, da*svdDatumDisplaySelectionA);
+	    ellipse(svdDatumDisplaySelectionX,svdDatumDisplaySelectionY, diam*3,diam*3);
+		fill (cr,cg,cb, ca*svdDatumDisplaySelectionA);
+		ellipse(svdDatumDisplaySelectionX,svdDatumDisplaySelectionY, diam,diam);
+	    
+	
+		float dx = mouseX - svdDatumDisplaySelectionX;
+		float dy = mouseY - svdDatumDisplaySelectionY; 
+		float dh = sqrt(dx*dx + dy*dy);
+		if (dh > (diam/2.0)){
+			
+			dx /= dh;
+			dy /= dh;
+			float qx = dx *diam*0.166; 
+			float qy = dy *diam*0.166; 
+			float px = dx *(diam-1)/2.0;
+			float py = dy *(diam-1)/2.0;
+			
+			float px0 = svdDatumDisplaySelectionX + px - qy;
+			float py0 = svdDatumDisplaySelectionY + py + qx;
+			float px1 = svdDatumDisplaySelectionX + px + qy;
+			float py1 = svdDatumDisplaySelectionY + py - qx;
+			
+			triangle (mx,my, px0,py0, px1,py1);
+		}
+	}
+}
+
+//=====================================================================================
+void displayProjectedSvdAxes() {
+  // draw axes projected into SVD space.
+  smooth();
+  stroke(colSvdAxes); 
+  strokeWeight(0.5); 
+
+  float minX = projectedSvdDataBounds[0].low;
+  float maxX = projectedSvdDataBounds[0].high; 
+
+  float minY = projectedSvdDataBounds[1].low; 
+  float maxY = projectedSvdDataBounds[1].high; 
+
+  float xAxis = map(0, minX, maxX, svdDrawRectR, svdDrawRectX);
+  float yAxis = map(0, minY, maxY, svdDrawRectY, svdDrawRectB);
+
+  //fill(colSvdArea);
+  noFill();
+  stroke(colSvdAxes);
+  strokeWeight(1.0); 
+  rect(svdDrawRectX, svdDrawRectY, svdDrawRectW, svdDrawRectH);
+  
+  //-----------------------------------
+  if (nSvdDimensionsToDisplay == 2) {
+  //  line (svdDrawRectXc, svdDrawRectY,  svdDrawRectXc, svdDrawRectB);
+  //  line (svdDrawRectX,  svdDrawRectYc, svdDrawRectR,  svdDrawRectYc);
+  } 
+ 
+  //-----------------------------------
+  else if (nSvdDimensionsToDisplay == 3) {
+    /*
+    float minZ = projectedSvdDataBounds[2].low; 
+    float maxZ = projectedSvdDataBounds[2].high; 
+    
+    float zAxis = map(0, minZ, maxZ, svdDrawRectZ0, svdDrawRectZ1);
+    line (xAxis, svdDrawRectY, svdDrawRectZ0, xAxis, svdDrawRectB, svdDrawRectZ0);
+    line (svdDrawRectX, yAxis, svdDrawRectZ0, svdDrawRectR, yAxis, svdDrawRectZ0);
+    // remaining axis?
+    */
+  }
+ 
+
+
+}
+

@@ -1,0 +1,132 @@
+int    nSvdDimensionsToSearch; 
+int    nSvdDimensionsToDisplay; 
+Bounds projectedSvdDataBounds[];
+// 	nProjectionDimensions
+
+var svdRawData;
+var SVDData = [];
+
+float svdPointDrawingTargetTime = 20.0;
+float svdPointDrawingTime = svdPointDrawingTargetTime;
+int   nSvdDatumsToDraw;
+
+int indexOfSelectedSvdDatum = -1;
+
+GMLAnalyzer analyzer;
+ConvexHull  huller;
+GMLTag 		aBogusTag;
+GMLProcessor tagProcessor;
+// http://typewith.me/golangmlwishlist
+
+color colSelectedSvdDatum = color(255,128,0,   150);
+color colSelectedSvdGlow  = color(255,192,0,    50);
+color colAppBackground    = color(255,255,255     );
+color colSvdArea          = color(255);
+color colSvdAxes          = color(0,0,0);
+color colSvdPoints        = color(0,0,0);
+color colGMLTagRender 	  = color(0,0,0);
+
+// https://markup.mozilla.org/requests/get_mark?mark_id=U36L
+// https://markup.mozilla.org/requests/recent_marks
+//=====================================================
+void setup(){
+	
+	nSvdDimensionsToDisplay = 2;
+	nSvdDimensionsToSearch  = 3; 
+	
+	//size(window.innerWidth, window.innerHeight); 
+	if (nSvdDimensionsToDisplay == 3){
+    	size(1000,500,P3D);
+    } else if (nSvdDimensionsToDisplay == 2){
+		size(1000,500); 
+	}
+
+    initializeSvdDrawAreaDimensions();
+
+    PFont fontA = loadFont("courier");
+    textFont(fontA, 14);  
+	
+	//--------------------------------------
+	// Load the SVD Analysis, whose rows are in the format:
+	// [Filename,-0.022962969,0.04189885],
+	// Previously: In the HTML, it was <script type="text/javascript" src="_SVDAnalysis2D.js"></script>
+	String svdRawDataToLoadFilename = "svd_results/_SVDAnalysis" + nSvdDimensionsToSearch + "D.js";
+	svdRawData = eval($.ajax({url: svdRawDataToLoadFilename, async: false}).responseText);
+	
+	loadSvdRawDataIntoObjects();
+	computeProjectedSvdBounds();
+	computeSvdDisplayCoordinates();
+	nSvdDatumsToDraw = SVDData.length();
+	
+	
+	
+	tagProcessor = new GMLProcessor();
+	analyzer = new GMLAnalyzer();
+	huller   = new ConvexHull();
+	
+	aBogusTag = makeBogusTag();
+    tagProcessor.processTag(aBogusTag, true, true, true);
+	tagProcessor.computeValuesForSvd();
+	tagProcessor.printForSvd();
+	
+	
+	//--------------------------------------------------------
+	// https://markup.mozilla.org/requests/get_mark?mark_id=U36L
+	String aJsonGmlFilename = "data/U36L.json";
+	var aJsonGml = $.getJSON(aJsonGmlFilename, gotGML);
+
+}
+
+void gotGML(Object response) {
+	console.log(response);
+}
+
+long startTime = 0;
+long endTime = 0;
+//=====================================================
+void draw(){  
+	
+	startTime = millis();
+    background(colAppBackground);
+    //println("Hello " + mouseX + " " + mouseY);
+
+	fill(255);
+	text("Hello " + mouseX + " " + mouseY, 20,20);
+	
+    indexOfSelectedSvdDatum = getIndexOfClosestSvdDisplayPointToMouse();
+	displayProjectedSvdPointGraph();
+	
+	
+	noFill();
+	stroke(0,0,0);
+	strokeWeight(0.01);
+	for (int i=0; i<30; i++){
+		pushMatrix();
+		translate(100*((int)i%10),100*floor((int)i/(int)10));
+		translate(100,100);
+		scale(80,80);
+		
+		aBogusTag.renderStatic();
+		popMatrix();
+	}
+	
+
+	endTime = millis();
+	float elapsed = (float)(endTime - startTime);
+	svdPointDrawingTime = 0.9*svdPointDrawingTime + 0.1*elapsed;
+	//println("Drawing " + nSvdDatumsToDraw + " took " + elapsed + " / " + svdPointDrawingTime);
+}
+
+//=====================================================
+void mouseReleased(){
+	
+	if (indexOfSelectedSvdDatum > -1){
+		String filenameToLoad = SVDData[indexOfSelectedSvdDatum].name;
+		println("Load file " + filenameToLoad + " (index # " + indexOfSelectedSvdDatum + ")");
+	}
+}
+
+
+
+
+
